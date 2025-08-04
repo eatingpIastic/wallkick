@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wall Kicker - PC Edition</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-screen">
+            <!-- Player character will be added here by JavaScript -->
+            <!-- Walls will be added here by JavaScript -->
+        </div>
+
+        <div id="ui-layer">
+            <div id="score-display">Score: 0</div>
+
+            <div id="start-screen" class="screen">
+                <h1>Wall Kicker</h1>
+                <p>Press <span class="key">SPACE</span> to kick between walls.</p>
+                <p>Avoid hitting the obstacles!</p>
+                <button id="start-button">Start Game</button>
+            </div>
+
+            <div id="game-over-screen" class="screen" style="display: none;">
+                <h2>Game Over</h2>
+                <p>Final Score: <span id="final-score">0</span></p>
+                <button id="restart-button">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
