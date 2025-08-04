@@ -3,30 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wall Kicker - PC Edition</title>
+    <title>Wall Kicker - Climb Edition</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="game-container">
+        <!-- The scrolling part of the level will live inside game-screen -->
         <div id="game-screen">
-            <!-- Player character will be added here by JavaScript -->
-            <!-- Walls will be added here by JavaScript -->
+            <div id="level-container">
+                <!-- Player and obstacles will be added here by JavaScript -->
+            </div>
         </div>
 
         <div id="ui-layer">
-            <div id="score-display">Score: 0</div>
+            <div id="score-display">Height: 0m</div>
 
             <div id="start-screen" class="screen">
                 <h1>Wall Kicker</h1>
-                <p>Press <span class="key">SPACE</span> to kick between walls.</p>
-                <p>Avoid hitting the obstacles!</p>
+                <p>Climb the wall automatically.</p>
+                <p>Press <span class="key">SPACE</span> to jump to the other side.</p>
+                <p>Land on <span class="safe-text">blue blocks</span>, avoid <span class="danger-text">red spikes</span>!</p>
                 <button id="start-button">Start Game</button>
             </div>
 
             <div id="game-over-screen" class="screen" style="display: none;">
                 <h2>Game Over</h2>
-                <p>Final Score: <span id="final-score">0</span></p>
+                <p>Final Height: <span id="final-score">0</span>m</p>
                 <button id="restart-button">Play Again</button>
             </div>
         </div>
