@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Game Logic Functions ---
 
     function createPlayer() {
-        if (player) gameScreen.removeChild(player);
+        // --- FIX --- The redundant check for the old player is removed from here.
         player = document.createElement('div');
         player.id = 'player';
         player.style.width = `${PLAYER_WIDTH}px`;
@@ -46,7 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
         isGameOver = false;
         score = 0;
         scoreDisplay.textContent = `Score: 0`;
-        gameScreen.innerHTML = ''; // Clear old walls and player
+        
+        // --- FIX --- This line now handles all cleanup of old elements.
+        gameScreen.innerHTML = ''; 
 
         // Show/Hide Screens
         startScreen.style.display = 'none';
@@ -54,6 +56,10 @@ document.addEventListener('DOMContentLoaded', () => {
         scoreDisplay.style.display = 'block';
 
         createPlayer();
+
+        // Stop any previous game loops just in case
+        clearInterval(gameLoopInterval);
+        clearInterval(wallGenerationInterval);
 
         // Start game loops
         gameLoopInterval = setInterval(gameLoop, 16); // Approx 60 FPS
@@ -71,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function kick() {
-        if (isGameOver) return;
+        if (isGameOver || !player) return;
 
         if (playerSide === 'left') {
             player.style.left = `${GAME_WIDTH - PLAYER_WIDTH}px`;
@@ -113,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checkCollision(wall) {
+        if (!player) return false;
         const playerRect = player.getBoundingClientRect();
         const wallSegments = wall.querySelectorAll('.wall-segment');
 
@@ -132,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function gameLoop() {
-        if (isGameOver) return;
+        if (isGameOver || !player) return;
         
         // Player slides down
         let playerTop = player.offsetTop + GAME_SPEED;
@@ -170,8 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     document.addEventListener('keydown', (e) => {
-        if (e.code === 'Space') {
-            kick();
+        if (e.code === 'Space' && !isGameOver) {
+            // Only allow kick if the game is running
+            if (gameLoopInterval) {
+                 kick();
+            }
         }
     });
 
