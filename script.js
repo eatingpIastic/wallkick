@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements ---
     const gameScreen = document.getElementById('game-screen');
+    const levelContainer = document.getElementById('level-container');
     const scoreDisplay = document.getElementById('score-display');
     const startScreen = document.getElementById('start-screen');
     const gameOverScreen = document.getElementById('game-over-screen');
@@ -11,176 +12,240 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Game Constants ---
     const GAME_WIDTH = 400;
     const GAME_HEIGHT = 600;
-    const PLAYER_WIDTH = 40;
-    const PLAYER_HEIGHT = 40;
-    const WALL_HEIGHT = 30;
-    const WALL_GAP_MIN = 120; // Min gap size
-    const WALL_GAP_MAX = 160; // Max gap size
-    const WALL_SPAWN_INTERVAL = 1400; // Milliseconds between new walls
-    const GAME_SPEED = 2; // How fast the walls move up
+    const PLAYER_SIZE = 30;
+    const OBSTACLE_SIZE = 40;
 
-    // --- Game State Variables ---
-    let player = null;
-    let score = 0;
-    let isGameOver = false;
-    let playerSide = 'left'; // 'left' or 'right'
-    let gameLoopInterval = null;
-    let wallGenerationInterval = null;
+    // --- Physics and Gameplay Constants ---
+    const CLIMB_SPEED = 1.5;
+    const JUMP_HORIZONTAL_SPEED = 4;
+    const JUMP_INITIAL_VERTICAL_SPEED = -6; // Negative is up
+    const GRAVITY = 0.25;
 
-    // --- Game Logic Functions ---
+    // --- Game State ---
+    let player, playerElement, obstacles, score, isGameOver, animationFrameId;
+    let playerState; // 'climbing' or 'jumping'
+    let levelScrollY; // How much the level has scrolled
+    let lastObstacleY; // Position of the highest generated obstacle
 
-    function createPlayer() {
-        // --- FIX --- The redundant check for the old player is removed from here.
-        player = document.createElement('div');
-        player.id = 'player';
-        player.style.width = `${PLAYER_WIDTH}px`;
-        player.style.height = `${PLAYER_HEIGHT}px`;
-        player.style.top = '50px';
-        player.style.left = '0px';
-        gameScreen.appendChild(player);
-        playerSide = 'left';
-    }
+    // --- Core Game Functions ---
 
-    function startGame() {
-        // Reset state
-        isGameOver = false;
+    function setupGame() {
+        levelContainer.innerHTML = '';
+        obstacles = [];
         score = 0;
-        scoreDisplay.textContent = `Score: 0`;
-        
-        // --- FIX --- This line now handles all cleanup of old elements.
-        gameScreen.innerHTML = ''; 
+        levelScrollY = 0;
+        lastObstacleY = GAME_HEIGHT - 100;
+        isGameOver = false;
+        playerState = 'climbing';
 
-        // Show/Hide Screens
+        player = {
+            x: 0,
+            y: GAME_HEIGHT / 2,
+            vx: 0, // Horizontal velocity
+            vy: 0, // Vertical velocity
+            onWall: 'left'
+        };
+
+        playerElement = document.createElement('div');
+        playerElement.id = 'player';
+        levelContainer.appendChild(playerElement);
+
+        // Generate initial safe platforms
+        for (let i = 0; i < 20; i++) {
+            generateObstacleRow(true); // isInitial = true
+        }
+
+        // Hide UI
         startScreen.style.display = 'none';
         gameOverScreen.style.display = 'none';
         scoreDisplay.style.display = 'block';
-
-        createPlayer();
-
-        // Stop any previous game loops just in case
-        clearInterval(gameLoopInterval);
-        clearInterval(wallGenerationInterval);
-
-        // Start game loops
-        gameLoopInterval = setInterval(gameLoop, 16); // Approx 60 FPS
-        wallGenerationInterval = setInterval(createWall, WALL_SPAWN_INTERVAL);
     }
-
+    
+    function startGame() {
+        setupGame();
+        // Use requestAnimationFrame for smoother animation
+        if(animationFrameId) cancelAnimationFrame(animationFrameId);
+        animationFrameId = requestAnimationFrame(gameLoop);
+    }
+    
     function endGame() {
         isGameOver = true;
-        clearInterval(gameLoopInterval);
-        clearInterval(wallGenerationInterval);
-        
-        finalScore.textContent = score;
+        cancelAnimationFrame(animationFrameId);
+        finalScore.textContent = Math.floor(score);
         gameOverScreen.style.display = 'flex';
-        scoreDisplay.style.display = 'none';
     }
 
-    function kick() {
-        if (isGameOver || !player) return;
+    // --- Game Loop ---
 
-        if (playerSide === 'left') {
-            player.style.left = `${GAME_WIDTH - PLAYER_WIDTH}px`;
-            playerSide = 'right';
-        } else {
-            player.style.left = '0px';
-            playerSide = 'left';
+    function gameLoop() {
+        if (isGameOver) return;
+
+        updatePlayerPosition();
+        checkCollisions();
+        updateCamera();
+        manageObstacles();
+        render();
+
+        animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    // --- Update Functions ---
+
+    function updatePlayerPosition() {
+        if (playerState === 'climbing') {
+            player.y -= CLIMB_SPEED;
+            // Check if player has climbed off the top of a wall block
+            if (!isSupported()) {
+                playerState = 'jumping';
+                player.vy = 0; // Start falling gently
+            }
+        } else if (playerState === 'jumping') {
+            player.vy += GRAVITY;
+            player.y += player.vy;
+            player.x += player.vx;
+        }
+
+        // Game over if player falls off the bottom of the screen
+        if (player.y > levelScrollY + GAME_HEIGHT) {
+            endGame();
         }
     }
 
-    function createWall() {
-        if (isGameOver) return;
-
-        const wall = document.createElement('div');
-        wall.classList.add('wall');
-        wall.style.height = `${WALL_HEIGHT}px`;
-        wall.style.top = `${GAME_HEIGHT}px`; // Start at the bottom
-        wall.dataset.scored = 'false'; // Custom attribute to track scoring
-
-        // Calculate gap
-        const gapSize = Math.floor(Math.random() * (WALL_GAP_MAX - WALL_GAP_MIN + 1)) + WALL_GAP_MIN;
-        const gapPosition = Math.floor(Math.random() * (GAME_WIDTH - gapSize));
-
-        // Create left segment
-        const leftSegment = document.createElement('div');
-        leftSegment.classList.add('wall-segment');
-        leftSegment.style.width = `${gapPosition}px`;
-
-        // Create right segment
-        const rightSegment = document.createElement('div');
-        rightSegment.classList.add('wall-segment');
-        rightSegment.style.width = `${GAME_WIDTH - gapPosition - gapSize}px`;
-
-        wall.appendChild(leftSegment);
-        // The space between segments is the gap
-        wall.appendChild(rightSegment);
-        
-        gameScreen.appendChild(wall);
+    function updateCamera() {
+        // Keep the player in the upper half of the screen
+        const cameraTarget = player.y - GAME_HEIGHT / 3;
+        if (cameraTarget < levelScrollY) {
+            levelScrollY = cameraTarget;
+        }
+        score = -levelScrollY / 10; // Update score based on height
     }
 
-    function checkCollision(wall) {
-        if (!player) return false;
-        const playerRect = player.getBoundingClientRect();
-        const wallSegments = wall.querySelectorAll('.wall-segment');
+    function manageObstacles() {
+        // Generate new obstacles if the top of the screen gets close
+        while (lastObstacleY > levelScrollY - 100) {
+            generateObstacleRow();
+        }
+        // Remove obstacles that are way off the bottom of the screen
+        obstacles = obstacles.filter(obs => {
+            if (obs.y > levelScrollY + GAME_HEIGHT + 100) {
+                obs.element.remove();
+                return false;
+            }
+            return true;
+        });
+    }
 
-        for (const segment of wallSegments) {
-            const segmentRect = segment.getBoundingClientRect();
-            // Simple AABB (Axis-Aligned Bounding Box) collision detection
+    // --- Rendering ---
+    
+    function render() {
+        levelContainer.style.transform = `translateY(${-levelScrollY}px)`;
+        playerElement.style.transform = `translate(${player.x}px, ${player.y}px)`;
+        scoreDisplay.textContent = `Height: ${Math.floor(score)}m`;
+    }
+
+    // --- Actions & Collision ---
+
+    function jump() {
+        if (isGameOver || playerState !== 'climbing') return;
+
+        playerState = 'jumping';
+        player.vy = JUMP_INITIAL_VERTICAL_SPEED;
+        player.vx = (player.onWall === 'left') ? JUMP_HORIZONTAL_SPEED : -JUMP_HORIZONTAL_SPEED;
+    }
+    
+    function checkCollisions() {
+        if (playerState !== 'jumping') return;
+
+        // Wall boundaries
+        if (player.x < 0) {
+            player.x = 0; // Hit left boundary
+        } else if (player.x + PLAYER_SIZE > GAME_WIDTH) {
+            player.x = GAME_WIDTH - PLAYER_SIZE; // Hit right boundary
+        }
+
+        // Check against obstacles
+        for (const obs of obstacles) {
             if (
-                playerRect.left < segmentRect.right &&
-                playerRect.right > segmentRect.left &&
-                playerRect.top < segmentRect.bottom &&
-                playerRect.bottom > segmentRect.top
+                player.x < obs.x + OBSTACLE_SIZE &&
+                player.x + PLAYER_SIZE > obs.x &&
+                player.y < obs.y + OBSTACLE_SIZE &&
+                player.y + PLAYER_SIZE > obs.y
             ) {
-                return true; // Collision detected
+                if (obs.type === 'spike') {
+                    endGame();
+                    return;
+                }
+                if (obs.type === 'wall') {
+                    // Check if landing on the side, not top/bottom
+                    if (player.vx > 0 && player.x + PLAYER_SIZE < obs.x + OBSTACLE_SIZE / 2) { // Moving right, hit left side of block
+                        landOnWall('left', obs);
+                    } else if (player.vx < 0 && player.x > obs.x + OBSTACLE_SIZE / 2) { // Moving left, hit right side of block
+                        landOnWall('right', obs);
+                    }
+                }
+            }
+        }
+    }
+
+    function landOnWall(side, wall) {
+        playerState = 'climbing';
+        player.vx = 0;
+        player.vy = 0;
+        if (side === 'left') { // Landed on left wall
+            player.onWall = 'left';
+            player.x = wall.x - PLAYER_SIZE;
+        } else { // Landed on right wall
+            player.onWall = 'right';
+            player.x = wall.x + OBSTACLE_SIZE;
+        }
+    }
+    
+    // Checks if there is a wall block directly under the player to support them
+    function isSupported() {
+        const wallX = (player.onWall === 'left') ? player.x + PLAYER_SIZE : player.x - OBSTACLE_SIZE;
+        for (const obs of obstacles) {
+            if (obs.type === 'wall' && Math.abs(obs.x - wallX) < 1 && player.y + PLAYER_SIZE > obs.y && player.y < obs.y + OBSTACLE_SIZE) {
+                return true;
             }
         }
         return false;
     }
-    
-    function gameLoop() {
-        if (isGameOver || !player) return;
+
+    // --- Obstacle Generation ---
+
+    function generateObstacleRow(isInitial = false) {
+        lastObstacleY -= OBSTACLE_SIZE * 2; // Spacing between rows
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+        const type = isInitial ? 'wall' : (Math.random() < 0.7 ? 'wall' : 'spike');
+
+        const xPos = (side === 'left') ? 0 : GAME_WIDTH - OBSTACLE_SIZE;
+        createObstacle(xPos, lastObstacleY, type);
         
-        // Player slides down
-        let playerTop = player.offsetTop + GAME_SPEED;
-        if (playerTop + PLAYER_HEIGHT > GAME_HEIGHT) {
-            playerTop = GAME_HEIGHT - PLAYER_HEIGHT; // Prevent falling through floor
-            endGame();
-            return;
+        // Sometimes, add an obstacle on the other side too
+        if (!isInitial && Math.random() < 0.3) {
+            const otherType = Math.random() < 0.3 ? 'wall' : 'spike';
+            const otherXPos = (side === 'left') ? GAME_WIDTH - OBSTACLE_SIZE : 0;
+            // Prevent two spikes directly opposite each other
+            if (type === 'spike' && otherType === 'spike') return;
+            createObstacle(otherXPos, lastObstacleY, otherType);
         }
-        player.style.top = `${playerTop}px`;
+    }
 
-        // Move walls up and check for collisions/scoring
-        const walls = document.querySelectorAll('.wall');
-        walls.forEach(wall => {
-            let wallTop = wall.offsetTop - GAME_SPEED;
-            wall.style.top = `${wallTop}px`;
+    function createObstacle(x, y, type) {
+        const element = document.createElement('div');
+        element.classList.add('obstacle', type === 'wall' ? 'wall-block' : 'spike');
+        element.style.transform = `translate(${x}px, ${y}px)`;
 
-            // Check for collision
-            if (checkCollision(wall)) {
-                endGame();
-            }
-
-            // Check for scoring
-            if (wall.offsetTop + WALL_HEIGHT < player.offsetTop && wall.dataset.scored === 'false') {
-                score++;
-                scoreDisplay.textContent = `Score: ${score}`;
-                wall.dataset.scored = 'true';
-            }
-            
-            // Remove walls that are off-screen
-            if (wall.offsetTop + WALL_HEIGHT < 0) {
-                wall.remove();
-            }
-        });
+        levelContainer.appendChild(element);
+        obstacles.push({ x, y, type, element });
     }
 
     // --- Event Listeners ---
     document.addEventListener('keydown', (e) => {
-        if (e.code === 'Space' && !isGameOver) {
-            // Only allow kick if the game is running
-            if (gameLoopInterval) {
-                 kick();
+        if (e.code === 'Space') {
+            e.preventDefault(); // Prevent page from scrolling
+            if (!isGameOver && startScreen.style.display === 'none') {
+                jump();
             }
         }
     });
